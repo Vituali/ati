@@ -106,7 +106,22 @@ export function populateContracts(container: Element | null, contracts: SgpContr
 export function populateOccurrenceTypes(container: Element | null, occurrenceTypes: { id: string; text: string }[], signal: AbortSignal): void {
   if (!container) return
 
-  const valid = Array.isArray(occurrenceTypes) ? occurrenceTypes.filter((t) => t?.id) : []
+  const rawValid = Array.isArray(occurrenceTypes) ? occurrenceTypes.filter((t) => t?.id) : []
+  const seenKeys = new Set<string>()
+  const valid: { id: string; text: string }[] = []
+  for (const t of rawValid) {
+    const key = (t.text ?? '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s*[-–]\s*/g, ' - ')
+      .replace(/\s+/g, ' ')
+      .trim()
+    if (!seenKeys.has(key)) {
+      seenKeys.add(key)
+      valid.push(t)
+    }
+  }
 
   if (valid.length === 0) {
     container.innerHTML = `
@@ -122,7 +137,7 @@ export function populateOccurrenceTypes(container: Element | null, occurrenceTyp
       <input type="text" id="occurrenceTypeSearchInput" class="modal-textarea" placeholder="Pesquisar tipo..." autocomplete="off">
       <input type="hidden" id="occurrenceTypeSelectedValue">
       <div id="occurrenceTypeOptions" class="searchable-options-list">
-        ${valid.map((t) => `<div class="searchable-option" data-value="${t.id}">${t.text}</div>`).join('')}
+        ${valid.map((t) => `<div class="searchable-option" data-value="${(t.id ?? '').replace(/"/g, '&quot;')}">${t.text}</div>`).join('')}
       </div>
     </div>
   `
@@ -135,7 +150,7 @@ export function populateOccurrenceTypes(container: Element | null, occurrenceTyp
   // Track focused option index for keyboard navigation
   let focusedIndex = -1
 
-  if (valid.length > 0) {
+  if (valid.length > 0 && !hiddenInput.value && !searchInput.value) {
     searchInput.value = valid[0].text
     hiddenInput.value = valid[0].id
   }
@@ -164,8 +179,13 @@ export function populateOccurrenceTypes(container: Element | null, occurrenceTyp
   })
 
   searchInput.addEventListener('input', () => {
-    const filter = searchInput.value.toUpperCase()
-    hiddenInput.value = ''
+    const rawVal = searchInput.value.trim()
+    const filter = rawVal.toUpperCase()
+    
+    // Tenta encontrar uma correspondência exata pelo texto digitado
+    const exactMatch = valid.find((t) => (t.text ?? '').toLowerCase().trim() === rawVal.toLowerCase())
+    hiddenInput.value = exactMatch ? exactMatch.id : ''
+
     let hasVisible = false
     let firstVisibleIndex = -1
 

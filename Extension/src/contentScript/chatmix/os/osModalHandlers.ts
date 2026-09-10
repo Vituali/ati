@@ -72,14 +72,14 @@ export function setupOsCheckbox(osCheckbox: HTMLInputElement, statusCheckbox: HT
 // BOTÕES DE TEMPLATE
 // =================================================================
 
-export function setupTemplateButtons(modalElement: HTMLElement, osTextArea: HTMLTextAreaElement, osBaseText: string, getOccurrenceTypes: () => SgpOccurrenceType[], is53: boolean | (() => boolean)): void {
+export function setupTemplateButtons(modalElement: HTMLElement, osTextArea: HTMLTextAreaElement, osBaseText: string, getOccurrenceTypes: () => SgpOccurrenceType[], _is53?: boolean | (() => boolean)): void {
   modalElement.querySelectorAll<HTMLButtonElement>('.template-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       const templateText = btn.getAttribute('data-template-text') ?? ''
       osTextArea.value = processDynamicPlaceholders(osBaseText + templateText).toUpperCase()
       osTextArea.focus()
 
-      // Seleciona tipo de ocorrência automaticamente se template tiver typeId
+      // Seleciona tipo de ocorrência automaticamente se template tiver typeId ou typeName
       const typeId35 = btn.getAttribute('data-occurrence-type-id')
       const typeId53 = btn.getAttribute('data-occurrence-type-id-53')
       const typeName = btn.getAttribute('data-occurrence-type-name')
@@ -90,41 +90,53 @@ export function setupTemplateButtons(modalElement: HTMLElement, osTextArea: HTML
       if (searchInput && hiddenInput) {
         const types = getOccurrenceTypes()
         let found: SgpOccurrenceType | undefined
-        const activeIs53 = typeof is53 === 'function' ? is53() : is53
 
-        if (activeIs53) {
-          // 1. Tenta match exato pelo ID de 53 (se o nome coincidir com o esperado)
-          if (typeId53) {
-            const byId = types.find((t) => String(t.id) === String(typeId53) || String(t.id_53) === String(typeId53))
-            if (byId && (!typeName || byId.text.toLowerCase().trim() === typeName.toLowerCase().trim())) {
-              found = byId
+        const normalizeTypeName = (str: string) =>
+          str
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/\s*[-–]\s*/g, ' - ')
+            .replace(/\s+/g, ' ')
+            .trim()
+
+        // 1. Tenta correspondência por ID (35 ou 53)
+        if (typeId35 || typeId53) {
+          found = types.find((t) => {
+            let t35: string | undefined = t.id_35
+            let t53: string | undefined = t.id_53
+            if (t.id && t.id.startsWith('{')) {
+              try {
+                const parsed = JSON.parse(t.id)
+                t35 = t35 || parsed.id_35
+                t53 = t53 || parsed.id_53
+              } catch (e) {}
             }
-          }
-          // 2. Fallback: match por nome amigável
-          if (!found && typeName) {
-            const cleanName = typeName.toLowerCase().trim()
-            found = types.find((t) => t.text.toLowerCase().trim() === cleanName)
-          }
-        } else {
-          // 1. Tenta match exato pelo ID de 35 (legado) (se o nome coincidir com o esperado)
-          if (typeId35) {
-            const byId = types.find((t) => String(t.id) === String(typeId35) || String(t.id_35) === String(typeId35))
-            if (byId && (!typeName || byId.text.toLowerCase().trim() === typeName.toLowerCase().trim())) {
-              found = byId
-            }
-          }
-          // 2. Fallback: match por nome amigável
-          if (!found && typeName) {
-            const cleanName = typeName.toLowerCase().trim()
-            found = types.find((t) => t.text.toLowerCase().trim() === cleanName)
-          }
+            const match35 = typeId35 && (String(t.id) === String(typeId35) || String(t35) === String(typeId35))
+            const match53 = typeId53 && (String(t.id) === String(typeId53) || String(t53) === String(typeId53))
+            return match35 || match53
+          })
+        }
+
+        // 2. Fallback por nome amigável com normalização de hífen/espaços/acentos
+        if (!found && typeName) {
+          const normTarget = normalizeTypeName(typeName)
+          found = types.find((t) => {
+            const normText = normalizeTypeName(t.text)
+            return normText === normTarget || normText.includes(normTarget) || normTarget.includes(normText)
+          })
         }
 
         if (found) {
           searchInput.value = found.text
           hiddenInput.value = found.id
-          searchInput.dispatchEvent(new CustomEvent('ati:draft-update', { bubbles: true }))
+        } else if (typeName) {
+          // Se não encontrou o item exato na lista carregada, define o texto do campo para o fallback de submissão
+          searchInput.value = typeName
+          hiddenInput.value = ''
         }
+
+        searchInput.dispatchEvent(new CustomEvent('ati:draft-update', { bubbles: true }))
       }
     })
   })

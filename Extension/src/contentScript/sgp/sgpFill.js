@@ -59,6 +59,33 @@
       }
     }
 
+    function norm(str) {
+      return str.toLowerCase().trim().replace(/\s+/g, ' ')
+    }
+
+    function noAccent(str) {
+      return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    }
+
+    function stripPrefix(str) {
+      return str.replace(/^(?:suporte|tecnico|adm|financeiro|comercial|rh|ceo)[_\s\d-–]*[-–]\s*/i, '').trim()
+    }
+
+    function matches(optionText, searchTerm) {
+      const t = norm(optionText)
+      const s = norm(searchTerm)
+      return t === s || noAccent(t) === noAccent(s)
+    }
+
+    function showError(message) {
+      console.error('ATI: ' + message)
+      var errDiv = document.createElement('div')
+      errDiv.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#dc3545;color:#fff;padding:12px 20px;z-index:999999;font-weight:bold;text-align:center;font-size:14px;font-family:sans-serif;box-shadow:0 2px 10px rgba(0,0,0,0.3)'
+      errDiv.textContent = 'ATI: ' + message
+      document.body.appendChild(errDiv)
+      setTimeout(function() { errDiv.remove() }, 10000)
+    }
+
     function fill() {
       const now = new Date()
       const pad = function(n) { return String(n).padStart(2, '0') }
@@ -66,48 +93,80 @@
 
       // Responsável por texto / Usuário Responsável
       if (username || fullname) {
-        const respSelect = document.querySelector('#id_responsavel')
+        var respSelect = document.querySelector('#id_responsavel')
         if (respSelect) {
-          const userWords = username ? username.split(/[^a-zA-Z0-9\u00C0-\u00FF]+/).filter(Boolean) : []
-          const nameWords = fullname ? fullname.split(/[^a-zA-Z0-9\u00C0-\u00FF]+/).filter(function(w) { return w.length > 2 }) : []
+          var options = Array.from(respSelect.options).filter(function(o) { return o.value })
+          var targetOption = null
+          var cleanUser = norm(username)
+          var cleanFullname = norm(fullname)
+          var noAccentFullname = noAccent(cleanFullname)
 
-          let bestOption = null
-          let bestScore = -1
-
-          Array.from(respSelect.options).forEach(function(o) {
-            const text = o.textContent.toLowerCase()
-            let score = 0
-
-            // Remove prefixos como SUPORTE -, TECNICO -, ADM - etc., para avaliar o nome em si
-            const cleanText = text.replace(/^(suporte|tecnico|adm|financeiro|comercial|rh|ceo)\s*-\s*/i, '').trim()
-
-            if (username && text === username) score += 1000
-            if (fullname && text === fullname) score += 2000
-
-            // Se o nome real começar com o username ou primeira palavra dele, ganha grande vantagem
-            if (username && cleanText.startsWith(username)) score += 500
-            if (userWords.length > 0 && cleanText.startsWith(userWords[0])) score += 300
-
-            // Se o nome real começar com o primeiro nome do nome completo, ganha vantagem
-            if (nameWords.length > 0 && cleanText.startsWith(nameWords[0])) score += 200
-
-            userWords.forEach(function(word) {
-              if (text.includes(word)) score += 100
+          // Passo 1: Match por código de usuário exato (ex: \bsuporte_05\b)
+          if (username) {
+            var isUserCode = /^(?:suporte|tecnico|adm|financeiro|comercial|rh|ceo)[\s_-]?\d+$/i.test(username)
+            var codeRegex = new RegExp('(?:^|[^a-zA-Z0-9])' + username.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + '(?:$|[^a-zA-Z0-9])', 'i')
+            targetOption = options.find(function(o) {
+              return isUserCode ? codeRegex.test(o.textContent) : matches(o.textContent, username)
             })
+          }
 
-            nameWords.forEach(function(word) {
-              if (text.includes(word)) score += 10
+          // Passo 2: Match por nome completo contido na opção (ex: "suporte_05 - VICTOR HENRIQUE DE OLIVEIRA")
+          if (!targetOption && fullname && cleanFullname.length > 3) {
+            targetOption = options.find(function(o) {
+              var text = norm(o.textContent)
+              var textNoAccent = noAccent(text)
+              return textNoAccent.includes(noAccentFullname)
             })
+          }
 
-            if (score > 0 && score > bestScore) {
-              bestScore = score
-              bestOption = o
-            }
-          })
+          // Passo 3: Match exato no texto sem prefixo
+          if (!targetOption && username) {
+            targetOption = options.find(function(o) { return matches(stripPrefix(o.textContent), username) })
+          }
+          if (!targetOption && fullname) {
+            targetOption = options.find(function(o) { return matches(stripPrefix(o.textContent), fullname) })
+          }
 
-          if (bestOption) {
-            console.log('ATI: Usuário Responsável selecionado: ' + bestOption.textContent + ' (Score: ' + bestScore + ')')
-            setValue('#id_responsavel', bestOption.value)
+          // Passo 4: Fallback por pontuação de tokens do nome
+          if (!targetOption) {
+            var genericDeptRegex = /^(suporte|tecnico|adm|financeiro|comercial|rh|ceo)$/i
+            var userWords = username ? username.split(/[^a-zA-Z0-9\u00C0-\u00FF]+/).filter(function(w) { return w.length > 1 && !genericDeptRegex.test(w) }) : []
+            var nameWords = fullname ? norm(fullname).split(/\s+/).filter(function(w) { return w.length > 2 }) : []
+            var bestScore = -1
+
+            options.forEach(function(o) {
+              var text = norm(o.textContent)
+              var textNoAccent = noAccent(text)
+              var score = 0
+
+              var matchedNameCount = 0
+              nameWords.forEach(function(word) {
+                if (text.includes(word) || textNoAccent.includes(noAccent(word))) {
+                  matchedNameCount++
+                  score += 100
+                }
+              })
+
+              if (nameWords.length > 0 && matchedNameCount === nameWords.length) {
+                score += 1000
+              }
+
+              userWords.forEach(function(word) {
+                if (text.includes(word)) score += 200
+              })
+
+              if (score > 0 && score > bestScore) {
+                bestScore = score
+                targetOption = o
+              }
+            })
+          }
+
+          if (targetOption) {
+            console.log('ATI: Usuário Responsável selecionado: ' + targetOption.textContent)
+            setValue('#id_responsavel', targetOption.value)
+          } else {
+            showError('Técnico "' + (username || fullname || 'desconhecido') + '" não encontrado na lista. Selecione manualmente.')
           }
         }
       }
@@ -164,20 +223,26 @@
 
       // Descrição e tipo
       if (data.osText) setValue('#id_conteudo', data.osText.toUpperCase())
-      if (data.occurrenceType) {
-        setValue('#id_tipo', data.occurrenceType)
-      }
 
-      // Fallback por nome caso a seleção por ID resulte em vazio
-      if (data.occurrenceTypeText) {
-        const tipoSelect = document.querySelector('#id_tipo')
-        if (tipoSelect && tipoSelect.value === '') {
-          const cleanTypeName = data.occurrenceTypeText.toLowerCase().trim()
-          const opt = Array.from(tipoSelect.options).find(function(o) {
-            return o.textContent.toLowerCase().trim() === cleanTypeName
+      var tipoSelect = document.querySelector('#id_tipo')
+      if (tipoSelect) {
+        var filledType = false
+        if (data.occurrenceType) {
+          setValue('#id_tipo', data.occurrenceType)
+          if (String(tipoSelect.value) === String(data.occurrenceType)) {
+            filledType = true
+          }
+        }
+
+        // Fallback por nome caso a seleção por ID não funcione ou esteja vazia
+        if (!filledType && data.occurrenceTypeText) {
+          var cleanSearchType = noAccent(norm(data.occurrenceTypeText))
+          var opt = Array.from(tipoSelect.options).find(function(o) {
+            var optTextClean = noAccent(norm(o.textContent))
+            return optTextClean === cleanSearchType || optTextClean.includes(cleanSearchType)
           })
           if (opt) {
-            console.log('ATI: Tipo de ocorrência selecionado pelo nome (fallback): ' + opt.textContent)
+            console.log('ATI: Tipo de ocorrência selecionado pelo nome: ' + opt.textContent)
             setValue('#id_tipo', opt.value)
           }
         }

@@ -88,10 +88,13 @@ export function createModal(config: ModalConfig): {
       const osTecnicos = Array.from(modal.querySelectorAll<HTMLOptionElement>('#osTecnicos option:checked')).map((o) => o.value)
       const osObservacao = modal.querySelector<HTMLTextAreaElement>('#osObservacao')?.value ?? ''
 
+      const occurrenceTypeSearchInput = modal.querySelector<HTMLInputElement>('#occurrenceTypeSearchInput')
+
       const data = {
         osText: osTextArea?.value ?? '',
         selectedContract: selectedContractInput?.value ?? null,
         occurrenceType: occurrenceTypeInput?.value ?? null,
+        occurrenceTypeText: occurrenceTypeSearchInput?.value ?? null,
         occurrenceStatus: (statusCheckbox?.checked ? '1' : '2') as '1' | '2',
         shouldCreateOS: createOSCheckbox?.checked ?? false,
         osMotivo,

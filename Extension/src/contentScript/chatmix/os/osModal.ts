@@ -166,6 +166,16 @@ export async function showOSModal(allTemplates: OsTemplate[], extractChatFn: () 
     const occurrenceTypeSearchInput = modalElement.querySelector<HTMLInputElement>('#occurrenceTypeSearchInput')
     const occurrenceTypeText = occurrenceTypeSearchInput?.value ?? null
 
+    if (!resolvedOccurrenceType && occurrenceTypeText && resolvedSgpData?.occurrenceTypes) {
+      const cleanSearch = occurrenceTypeText.toLowerCase().trim()
+      const foundType = resolvedSgpData.occurrenceTypes.find(
+        (t) => t.text.toLowerCase().trim() === cleanSearch || t.text.toLowerCase().includes(cleanSearch)
+      )
+      if (foundType) {
+        resolvedOccurrenceType = foundType.id
+      }
+    }
+
     const submissionData = {
       ...clientData,
       clientSgpId: correctClientSgpId,
@@ -196,7 +206,7 @@ export async function showOSModal(allTemplates: OsTemplate[], extractChatFn: () 
       })
       console.log('Extensão ATI: O.S copiada.')
     } else if (userAction.action === 'fill_sgp') {
-      if (!submissionData.osText || !submissionData.selectedContract || !submissionData.occurrenceType) {
+      if (!submissionData.osText || !submissionData.selectedContract || (!submissionData.occurrenceType && !submissionData.occurrenceTypeText)) {
         throw new Error('Descrição, Contrato e Tipo são obrigatórios.')
       }
       if (submissionData.shouldCreateOS) {
@@ -234,7 +244,7 @@ export async function showOSModal(allTemplates: OsTemplate[], extractChatFn: () 
             {
               type: 'ATI_SGP_FILL',
               data: submissionData,
-              username: (session?.sgpUsername ?? session?.username)?.toLowerCase() ?? '',
+              username: (session?.sgpUsername || session?.username)?.toLowerCase() ?? '',
               fullname: session?.nomeCompleto?.toLowerCase() ?? '',
             },
             window.location.origin,

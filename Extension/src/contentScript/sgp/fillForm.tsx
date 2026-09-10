@@ -411,7 +411,7 @@ if (isOccurrencePage) {
   chrome.storage.local.get([storageKey, 'ati_user_session', 'hideSgpOsPrompt'], (result) => {
     const data = result[storageKey]
     const session = result.ati_user_session
-    const username = (session?.sgpUsername ?? session?.username)?.toLowerCase() ?? ''
+    const username = (session?.sgpUsername || session?.username)?.toLowerCase() ?? ''
     const hideOsPrompt = !!result.hideSgpOsPrompt
 
     if (!data) {
