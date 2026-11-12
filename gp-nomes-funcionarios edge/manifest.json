@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "SGP - Usuário para Funcionário",
+  "version": "1.0.0",
+  "description": "Substitui códigos de usuário (suporte_06, tecnico_01, etc.) pelo nome do funcionário no SGP.",
+  "permissions": [
+    "scripting"
+  ],
+  "host_permissions": [
+    "http://201.158.20.53:8000/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["http://201.158.20.53:8000/admin/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
