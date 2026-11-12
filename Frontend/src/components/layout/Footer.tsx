@@ -1,9 +1,14 @@
-import './Footer.css'
+import moonflareLogo from '../../assets/moonflare-2-logo-nome.svg'
 
 const Footer = () => {
   return (
     <footer className="footer">
-      <p>Desenvolvido por Moonflare Labs</p>
+      <img
+        src={moonflareLogo}
+        alt="Moonflare"
+        width={200}
+        height={auto}
+      />
     </footer>
   )
 }
